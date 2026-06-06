@@ -73,13 +73,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.chat.send_action("typing")
         start_session()
 
-        # Instant feedback
-        dots = await update.message.reply_text("...")
-
         before = pane()
         send(msg)
 
-        # Wait for response — tight loop
+        # Stream: send each new line as it appears
+        sent = set()
+        bubbles_sent = 0
         last = before; idle = 0
         for _ in range(600):
             await asyncio.sleep(0.2)
@@ -90,30 +89,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 idle = 0; last = cur
 
-        after = pane()
-        # Diff: only new content
-        bl = before.split('\n'); al = after.split('\n')
-        new_lines = []
-        for i, line in enumerate(al):
-            if i >= len(bl) or line != bl[i]:
-                new_lines = al[i:]
-                break
-        reply = clean('\n'.join(new_lines))
+            # Extract new content
+            bl = before.split('\n'); al = cur.split('\n')
+            new_lines = []
+            for i, line in enumerate(al):
+                if i >= len(bl) or line != bl[i]:
+                    new_lines = al[i:]
+                    break
+            new_text = clean('\n'.join(new_lines))
+            if not new_text: continue
 
-        if not reply:
-            await update.message.reply_text("...")
-            return
+            # Find new bubbles
+            bubbles = [b.strip() for b in new_text.split('\n\n') if b.strip()]
+            if len(bubbles) <= 1:
+                bubbles = [b.strip() for b in new_text.split('\n') if b.strip()]
 
-        # Bubbles
-        bubbles = [b.strip() for b in reply.split('\n\n') if b.strip()]
-        if len(bubbles) <= 1:
-            bubbles = [b.strip() for b in reply.split('\n') if b.strip()]
-        bubbles = bubbles[:4]
+            for b in bubbles[:4]:
+                key = b[:40]
+                if key and key not in sent:
+                    sent.add(key)
+                    await update.message.reply_text(b[:4000])
+                    bubbles_sent += 1
+                    if bubbles_sent >= 4: break
+            if bubbles_sent >= 4: break
 
-        for b in bubbles:
-            await update.message.reply_text(b[:4000])
-            if len(bubbles) > 1:
-                await asyncio.sleep(0.5)
+        if bubbles_sent == 0:
+            await update.message.reply_text("hmm, nothing came back")
 
     except Exception as e:
         await update.message.reply_text(f"Error: {str(e)[:500]}")
