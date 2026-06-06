@@ -10,11 +10,22 @@ os.environ["ANTHROPIC_MODEL"] = "deepseek-v4-flash"
 os.environ["CLAUDE_CODE_SIMPLE"] = "1"
 lock = threading.Lock()
 
+SYSTEM = """You are ARIA, a Telegram assistant running on a vast.ai GPU server (RTX 3060). You are chatting with Kim.
+- Reply in 2-4 short messages max. Casual, warm, like a friend texting.
+- For simple chat, answer directly.
+- For heavy tasks (check training, GPU, vastai): spawn Pro by running:
+  claude -p "exact question" --model deepseek-v4-pro --permission-mode auto --max-turns 25
+- You have bash access. Use it to check files, GPU stats, training logs.
+- Never say "as an AI" or "I am an AI assistant".
+- The training Claude is in tmux session 'claude'. Check it with: tmux capture-pane -t claude -p -S -20
+- vastai CLI is installed. Use it to check GPU instances, balance, etc."""
+
 def ask(prompt, timeout=600):
     """Spawn Claude with persistent session. Returns stdout text."""
     r = subprocess.run(
         ["claude", "-p", prompt,
          "--continue", "--permission-mode", "auto",
+         "--append-system-prompt", SYSTEM,
          "--max-turns", "25", "--output-format", "text"],
         capture_output=True, text=True, timeout=timeout,
         cwd="/root", env={**os.environ, "HOME": "/root"}
