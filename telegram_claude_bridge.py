@@ -14,17 +14,11 @@ lock = threading.Lock()
 LOG_DIR = "/root/.claude/projects/-root"
 
 def find_flash_log():
-    """Find the JSONL session log for aria-flash."""
-    for f in sorted(glob.glob(f"{LOG_DIR}/*.jsonl"), key=os.path.getmtime, reverse=True):
-        try:
-            with open(f) as fh:
-                for _ in range(5):
-                    line = fh.readline()
-                    if not line: break
-                    if 'aria-flash' in line.lower() or 'aria_flash' in line.lower():
-                        return f
-        except: pass
-    return None
+    """Find the JSONL session log — just use most recently modified one."""
+    env_path = os.environ.get("ARIA_FLASH_LOG_PATH", "")
+    if env_path and os.path.exists(env_path): return env_path
+    files = glob.glob(f"{LOG_DIR}/*.jsonl")
+    return max(files, key=os.path.getmtime) if files else None
 
 def read_reply(logfile, after_bytes):
     if not logfile or not os.path.exists(logfile): return "", after_bytes
@@ -53,10 +47,14 @@ def send_tmux(msg):
 
 def ensure_session():
     if subprocess.run(f"tmux has-session -t {SESSION}", shell=True).returncode != 0:
-        subprocess.run(f"tmux new-session -d -s {SESSION} \"source /root/.aria_env && ANTHROPIC_MODEL=deepseek-v4-flash claude --name aria-flash --permission-mode auto 2>&1\"", shell=True)
+        subprocess.run(f"tmux new-session -d -s {SESSION} \"source /root/.aria_env && ANTHROPIC_MODEL=deepseek-v4-flash claude --permission-mode auto 2>&1\"", shell=True)
         time.sleep(5)
         subprocess.run(f"tmux send-keys -t {SESSION} Enter", shell=True)
         time.sleep(1)
+        # Save the new JSONL path
+        files = sorted(glob.glob(f"{LOG_DIR}/*.jsonl"), key=os.path.getmtime, reverse=True)
+        if files:
+            os.environ["ARIA_FLASH_LOG_PATH"] = files[0]
         # Inject prompt
         prompt = "You are ARIA, a warm Telegram assistant. Reply in 2-4 short casual messages. Chat like a friend first, then do work in background. For heavy tasks: write question to /tmp/q.txt and send to aria-pro via tmux. Never say as an AI."
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
