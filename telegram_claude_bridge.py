@@ -15,6 +15,7 @@ def send(msg):
         f.write(msg); f.flush()
         subprocess.run(f'tmux load-buffer -t {SESSION} {f.name}', shell=True)
         subprocess.run(f'tmux paste-buffer -t {SESSION} -d', shell=True)
+        # Send Enter separately — more reliable
         subprocess.run(f'tmux send-keys -t {SESSION} Enter', shell=True)
     try: os.unlink(f.name)
     except: pass
