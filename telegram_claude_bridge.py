@@ -67,29 +67,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         start_bytes = os.path.getsize(log) if os.path.exists(log) else 0
         send(msg)
 
-        reply = ""
+        sent_texts = set()
+        bubbles = []
         for _ in range(300):
             await asyncio.sleep(0.3)
-            reply, _ = read_reply(log, start_bytes)
-            if reply:
-                if any(w in reply.lower() for w in ['do you want to proceed','requires confirmation','auto mode classifier']):
-                    reply += '\n\nReply 1=yes 2=yes,always 3=no'
+            full_reply, _ = read_reply(log, start_bytes)
+            if not full_reply: continue
+
+            # Check for permission question
+            if any(w in full_reply.lower() for w in ['do you want to proceed','requires confirmation','auto mode classifier']):
+                await update.message.reply_text(full_reply[:4000] + '\n\nReply 1=yes 2=yes,always 3=no')
                 break
 
-        if reply:
-            # Split on double newlines (natural paragraph breaks)
-            bubbles = [b.strip() for b in reply.split('\n\n') if b.strip()]
-            # If only 1 bubble, try single newlines
-            if len(bubbles) <= 1:
-                bubbles = [b.strip() for b in reply.split('\n') if b.strip()]
-            # Cap at 4
-            bubbles = bubbles[:4]
-            for i, bubble in enumerate(bubbles):
-                if i > 0:
-                    await update.message.chat.send_action("typing")
-                    delay = 0.3 + len(bubble) * 0.02 + (hash(bubble[:10]) % 8) * 0.03
-                    await asyncio.sleep(min(delay, 5.0))
-                await update.message.reply_text(bubble[:4000])
+            # Split into paragraphs, find new ones
+            new_bubbles = [b.strip() for b in full_reply.split('\n\n') if b.strip()]
+            if len(new_bubbles) <= 1:
+                new_bubbles = [b.strip() for b in full_reply.split('\n') if b.strip()]
+            new_bubbles = new_bubbles[:4]  # cap
+
+            # Send new bubbles as they appear
+            for b in new_bubbles:
+                key = b[:50]
+                if key not in sent_texts:
+                    sent_texts.add(key)
+                    if bubbles:  # not first bubble
+                        await update.message.chat.send_action("typing")
+                        delay = 0.3 + len(b) * 0.02 + (hash(key) % 8) * 0.03
+                        await asyncio.sleep(min(delay, 5.0))
+                    await update.message.reply_text(b[:4000])
+                    bubbles.append(b)
+
+            # All bubbles sent = done
+            if len(bubbles) >= len(new_bubbles) and bubbles:
+                # Wait 2 more seconds to make sure Claude is really done
+                await asyncio.sleep(2)
+                check, _ = read_reply(log, start_bytes)
+                if check == full_reply:
+                    break
         else:
             await update.message.reply_text("(no response)")
     except Exception as e:
