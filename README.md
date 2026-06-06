@@ -5,9 +5,50 @@ A lightweight Python bridge that connects Claude Code to Telegram. Claude runs p
 ## How It Works
 
 ```
-Telegram → Python bridge → tmux paste-buffer → Claude Code (persistent)
-                                                          ↓
-Telegram ← split & send ← JSONL session log ← Claude responds
+                        ┌─────────────┐
+  "how's training?" ──▶ │   Telegram  │
+                        └──────┬──────┘
+                               │ webhook
+                        ┌──────▼──────┐
+                        │   Bridge    │  poll every 300ms
+                        │   ~120 LOC  │───────┐
+                        └──────┬──────┘       │
+                               │               │
+                     paste-buffer + Enter      │
+                               │               │
+                        ┌──────▼──────┐  ┌─────▼─────┐
+                        │  tmux        │  │  JSONL    │
+                        │  aria-claude │  │  session  │
+                        └──────┬──────┘  │  log      │
+                               │         └───────────┘
+                        ┌──────▼──────┐
+                        │ Claude Code │──▶ writes response
+                        │ (persistent)│    in realtime
+                        └─────────────┘
+
+  Response pipeline:
+  ┌─────────────────────────────────────────────────────┐
+  │ Claude writes: "Disk full. I freed 5GB. Starting." │
+  └──────────────────────┬──────────────────────────────┘
+                         │
+                         ▼
+  ┌─────────────────────────────────────────────┐
+  │ split_human()                                │
+  │  1. split by . ! ?                          │
+  │  2. long parts → split by ,                 │
+  │  3. cap each chunk at 4000 chars             │
+  └──────────────────────┬──────────────────────┘
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+     "Disk full."   "I freed 5GB."  "Starting."
+          │              │              │
+          ▼              ▼              ▼
+       typing...      typing...      typing...
+       1s delay       1s delay
+          │              │              │
+          ▼              ▼              ▼
+       Telegram       Telegram       Telegram
 ```
 
 - **Claude stays alive** in a tmux session — maintains context across messages
