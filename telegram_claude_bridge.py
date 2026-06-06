@@ -4,21 +4,10 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 OWNER_ID = int(os.environ["OWNER_ID"])
-SESSION = "aria-claude"
+SESSION = "aria-flash"
 os.environ["ANTHROPIC_API_KEY"] = os.environ["DEEPSEEK_KEY"] = "sk-5b400a3177cb44089b29915c231edb5f"
 os.environ["ANTHROPIC_BASE_URL"] = "https://api.deepseek.com/anthropic"
-FLASH = {**os.environ, "ANTHROPIC_MODEL": "deepseek-v4-flash"}
-PRO = {**os.environ, "ANTHROPIC_MODEL": "deepseek-v4-pro", "ANTHROPIC_SMALL_FAST_MODEL": "deepseek-v4-flash"}
 lock = threading.Lock()
-
-def claude_flash(prompt, max_turns=1, timeout=30):
-    r = subprocess.run(
-        ["claude", "-p", prompt, "--permission-mode", "auto",
-         "--max-turns", str(max_turns), "--output-format", "text"],
-        capture_output=True, text=True, timeout=timeout,
-        cwd="/root", env={**os.environ, **FLASH, "HOME": "/root"}
-    )
-    return (r.stdout + r.stderr).strip()
 
 def send_tmux(msg):
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
@@ -52,18 +41,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("one sec...")
         return
     try:
-        # ── Pipeline: Flash ack → persistent Pro (tmux) → Flash format → bubbles ──
+        # ── Pipeline: persistent Flash handles everything ──
 
-        # Layer 1: Flash instant ack (stateless, fast)
-        ack = claude_flash(
-            f"User said: '{msg}'. Reply with a short casual acknowledgment. Under 5 words. Be natural. Just the phrase, nothing else.",
-            max_turns=1, timeout=10
-        )
-        if ack:
-            await update.message.reply_text(ack.strip()[:200])
-
-        # Layer 2: Send to persistent aria-claude (maintains context, uses Pro)
-        log = os.environ.get("ARIA_LOG_PATH", "")
+        # Send to persistent aria-flash (handles chat, spawns Pro when needed)
+        log = os.environ.get("ARIA_FLASH_LOG_PATH", os.environ.get("ARIA_LOG_PATH", ""))
         start_bytes = os.path.getsize(log) if os.path.exists(log) else 0
         send_tmux(msg)
 
