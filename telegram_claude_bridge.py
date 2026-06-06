@@ -73,10 +73,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.chat.send_action("typing")
         start_session()
 
-        before_lines = len(pane().split('\n'))
+        # Capture last 5 lines as fingerprint to find new content
+        before_tail = '\n'.join(pane().split('\n')[-5:])
         send(msg)
 
-        # Stream: send each new line as it appears
+        # Stream: send each new bubble as it appears
         sent = set()
         bubbles_sent = 0
         last = ""; idle = 0
@@ -89,10 +90,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 idle = 0; last = cur
 
-            # Extract new content (lines after the before snapshot)
-            cur_lines = cur.split('\n')
-            new_lines = cur_lines[before_lines:] if len(cur_lines) > before_lines else []
-            new_text = clean('\n'.join(new_lines))
+            # Find content AFTER the fingerprint
+            idx = cur.find(before_tail)
+            new_text = clean(cur[idx + len(before_tail):]) if idx >= 0 else ""
             if not new_text: continue
 
             # Find new bubbles
