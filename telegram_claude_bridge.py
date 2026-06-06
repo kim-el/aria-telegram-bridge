@@ -62,7 +62,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Busy.")
         return
     try:
-        await update.message.reply_text("on it")
         await update.message.chat.send_action("typing")
         log = os.environ.get("ARIA_LOG_PATH", "")
         start_bytes = os.path.getsize(log) if os.path.exists(log) else 0
