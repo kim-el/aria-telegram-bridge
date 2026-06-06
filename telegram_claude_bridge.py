@@ -100,10 +100,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bubbles = [b.strip() for b in reply.split('\n\n') if b.strip()]
         if len(bubbles) <= 1:
             bubbles = [b.strip() for b in reply.split('\n') if b.strip()]
-        for b in bubbles[:4]:
+        for i, b in enumerate(bubbles[:4]):
+            if i > 0:
+                await update.message.chat.send_action("typing")
+                delay = 0.5 + len(b) * 0.03 + (hash(b[:10]) % 8) * 0.04
+                await asyncio.sleep(min(delay, 6.0))
             await update.message.reply_text(b[:4000])
-            if len(bubbles) > 1:
-                await asyncio.sleep(0.4)
 
     except Exception as e:
         await update.message.reply_text(f"Error: {str(e)[:500]}")
