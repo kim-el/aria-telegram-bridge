@@ -36,19 +36,16 @@ def read_reply(logfile, after_bytes):
     return '\n'.join(texts), os.path.getsize(logfile)
 
 def split_human(text):
-    """Split into short human-like messages by sentence boundaries."""
     parts = re.split(r'(?<=[.!?])\s+', text)
     result = []
     for p in parts:
         p = p.strip()
         if not p: continue
-        # Further split on commas for long parts
         if len(p) > 300:
             sub = re.split(r'(?<=,)\s+', p)
             result.extend([s.strip() for s in sub if s.strip()])
         else:
             result.append(p)
-    # Hard cap at 4000
     final = []
     for m in result:
         while len(m) > 4000:
@@ -64,9 +61,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Busy.")
         return
     try:
-        # Instant ack so user knows we'''re on it
-        await update.message.reply_text('on it 👀')
-
+        await update.message.reply_text("on it")
+        await update.message.chat.send_action("typing")
         log = os.environ.get("ARIA_LOG_PATH", "")
         start_bytes = os.path.getsize(log) if os.path.exists(log) else 0
         send(msg)
@@ -76,15 +72,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.3)
             reply, _ = read_reply(log, start_bytes)
             if reply:
-                # If Claude is asking a permission question, present options clearly
                 if any(w in reply.lower() for w in ['do you want to proceed','requires confirmation','auto mode classifier']):
-                    reply += '
-
-Reply: 1 (yes) / 2 (yes, always) / 3 (no)'
-                break
-            # Timeout after 30s without reply - Claude might be waiting on user
-            if _ > 100 and not reply:
-                reply = 'Claude is waiting for your response. Check tmux aria-claude.'
+                    reply += '\n\nReply 1=yes 2=yes,always 3=no'
                 break
 
         if reply:
