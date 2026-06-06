@@ -1,6 +1,6 @@
 # ARIA — Claude Code Telegram Bridge
 
-A lightweight Python bridge that connects Claude Code to Telegram. Claude runs persistently in tmux on a GPU server. ARIA relays messages between Telegram and Claude, reading responses from Claude's JSONL session log.
+A lightweight Python bridge that connects Claude Code to Telegram. Claude runs persistently in tmux on any machine — cloud instance, VPS, or local server. ARIA relays messages between Telegram and Claude, reading responses from Claude's JSONL session log.
 
 ## How It Works
 
@@ -20,7 +20,7 @@ Telegram ← split & send ← JSONL session log ← Claude responds
 - Message @BotFather on Telegram
 - `/newbot` → choose name → get token
 
-### 2. GPU Server (vast.ai / RunPod)
+### 2. Any Machine (cloud instance, VPS, or local)
 ```bash
 git clone https://github.com/kim-el/aria-telegram-bridge
 cd aria-telegram-bridge
@@ -49,7 +49,7 @@ python3 telegram_claude_bridge.py
 
 ### 3. Commands
 - `/start` — check ARIA is alive
-- `/status` — GPU stats
+- `/status` — server stats
 - Any message → forwarded to Claude
 
 ## Files
