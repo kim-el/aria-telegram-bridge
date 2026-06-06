@@ -2,3 +2,4 @@
 .env.example
 .env.example
 __pycache__/
+graphify-out/
