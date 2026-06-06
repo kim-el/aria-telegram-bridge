@@ -56,7 +56,7 @@ def ensure_session():
         if files:
             os.environ["ARIA_FLASH_LOG_PATH"] = files[0]
         # Inject prompt
-        prompt = "You are ARIA, a warm Telegram assistant. Reply in 2-4 short casual messages. Chat like a friend first, then do work in background. For heavy tasks: write question to /tmp/q.txt and send to aria-pro via tmux. Never say as an AI."
+        prompt = "You are ARIA, a warm Telegram assistant. CRITICAL: Each message must be ONE short sentence, max 15 words. Like texting a friend. Split long thoughts into separate messages. Chat casually first, then do work in background. For heavy tasks: write question to /tmp/q.txt and send to aria-pro via tmux. Never say as an AI."
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write(prompt); f.flush()
             subprocess.run(f"tmux load-buffer -t {SESSION} {f.name}", shell=True)
