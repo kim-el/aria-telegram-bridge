@@ -73,13 +73,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.chat.send_action("typing")
         start_session()
 
-        before = pane()
+        before_lines = len(pane().split('\n'))
         send(msg)
 
         # Stream: send each new line as it appears
         sent = set()
         bubbles_sent = 0
-        last = before; idle = 0
+        last = ""; idle = 0
         for _ in range(600):
             await asyncio.sleep(0.2)
             cur = pane()
@@ -89,13 +89,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 idle = 0; last = cur
 
-            # Extract new content
-            bl = before.split('\n'); al = cur.split('\n')
-            new_lines = []
-            for i, line in enumerate(al):
-                if i >= len(bl) or line != bl[i]:
-                    new_lines = al[i:]
-                    break
+            # Extract new content (lines after the before snapshot)
+            cur_lines = cur.split('\n')
+            new_lines = cur_lines[before_lines:] if len(cur_lines) > before_lines else []
             new_text = clean('\n'.join(new_lines))
             if not new_text: continue
 
