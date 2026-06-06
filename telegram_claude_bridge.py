@@ -5,10 +5,11 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 OWNER_ID = int(os.environ["OWNER_ID"])
 SESSION = "aria-flash"
-os.environ["ANTHROPIC_API_KEY"] = os.environ["DEEPSEEK_KEY"] = "sk-5b400a3177cb44089b29915c231edb5f"
-os.environ["ANTHROPIC_BASE_URL"] = "https://api.deepseek.com/anthropic"
-os.environ["ANTHROPIC_MODEL"] = "deepseek-v4-flash"
-os.environ["CLAUDE_CODE_SIMPLE"] = "1"
+# All secrets must be set in environment before running
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic")
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "deepseek-v4-flash")
+os.environ.setdefault("CLAUDE_CODE_SIMPLE", "1")
 lock = threading.Lock()
 
 LOG_DIR = "/root/.claude/projects/-root"
