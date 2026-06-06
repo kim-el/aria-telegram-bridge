@@ -77,13 +77,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
 
         if reply:
-            chunks = split_human(reply)
-            for i, chunk in enumerate(chunks):
+            # Chat formatter: reshape technical answer → casual chat lines
+            try:
+                fmt = subprocess.run(
+                    ["claude", "-p",
+                     f"Rewrite as 2-4 casual chat messages. Be concise. No markdown, no emojis. Keep key facts. Sound like a friend:\n\n{reply}",
+                     "--max-turns", "1", "--output-format", "text", "--permission-mode", "auto"],
+                    capture_output=True, text=True, timeout=30,
+                    env={**os.environ, "HOME": "/root"}
+                )
+                formatted = fmt.stdout.strip() or reply
+            except:
+                formatted = reply
+
+            lines = [l.strip() for l in formatted.split('\n') if l.strip()][:4]  # max 4 bubbles
+            for i, line in enumerate(lines):
                 if i > 0:
                     await update.message.chat.send_action("typing")
-                    delay = 0.4 + len(chunk) * 0.04 + (hash(chunk[:10]) % 10) * 0.05
-                    await asyncio.sleep(min(delay, 8.0))
-                await update.message.reply_text(chunk)
+                    delay = 0.3 + len(line) * 0.03 + (hash(line[:10]) % 8) * 0.04
+                    await asyncio.sleep(min(delay, 6.0))
+                await update.message.reply_text(line[:4000])
         else:
             await update.message.reply_text("(no response)")
     except Exception as e:
