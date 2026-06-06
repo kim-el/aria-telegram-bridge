@@ -83,15 +83,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("hmm, nothing came back. try again?")
             return
 
-        # Layer 3: Flash reformats into chat bubbles (stateless, fast)
-        formatted = claude_flash(
-            f"Rewrite as 2-4 casual text messages. One sentence per line. No markdown, no emojis. Keep key facts. Sound like a friend:\n\n{pro_reply}",
-            max_turns=1, timeout=15
-        )
-        text = formatted if formatted else pro_reply
-
-        # Send as bubbles
-        bubbles = [b.strip() for b in text.split('\n') if b.strip()][:4]
+        # Send as bubbles — split on natural paragraph breaks
+        text = pro_reply
+        bubbles = [b.strip() for b in text.split('\n\n') if b.strip()]
+        if len(bubbles) <= 1:
+            bubbles = [b.strip() for b in text.split('\n') if b.strip()]
+        bubbles = bubbles[:4]
         for i, b in enumerate(bubbles):
             if i > 0:
                 delay = 0.3 + len(b) * 0.02 + (hash(b[:10]) % 8) * 0.03
