@@ -79,8 +79,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for i, chunk in enumerate(chunks):
                 if i > 0:
                     await update.message.chat.send_action("typing")
-                    delay = 0.4 + len(chunk) * 0.04 + (hash(chunk[:10]) % 10) * 0.05  # sim human typing speed
-                await asyncio.sleep(min(delay, 8.0))  # cap at 8s
+                    delay = 0.4 + len(chunk) * 0.04 + (hash(chunk[:10]) % 10) * 0.05
+                    await asyncio.sleep(min(delay, 8.0))
                 await update.message.reply_text(chunk)
         else:
             await update.message.reply_text("(no response)")
