@@ -1,111 +1,72 @@
-import os, subprocess, asyncio, json, threading, tempfile, re
+import os, subprocess, asyncio, threading
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 OWNER_ID = int(os.environ["OWNER_ID"])
-SESSION = "aria-claude"
-os.environ["ANTHROPIC_API_KEY"] = "sk-5b400a3177cb44089b29915c231edb5f"
+os.environ["ANTHROPIC_API_KEY"] = os.environ["DEEPSEEK_KEY"] = "sk-5b400a3177cb44089b29915c231edb5f"
 os.environ["ANTHROPIC_BASE_URL"] = "https://api.deepseek.com/anthropic"
-os.environ["CLAUDE_CODE_SIMPLE"] = "1"
+FLASH = {**os.environ, "ANTHROPIC_MODEL": "deepseek-v4-flash"}
+PRO = {**os.environ, "ANTHROPIC_MODEL": "deepseek-v4-pro", "ANTHROPIC_SMALL_FAST_MODEL": "deepseek-v4-flash"}
 lock = threading.Lock()
 
-def send(msg):
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-        f.write(msg); f.flush()
-        subprocess.run(f'tmux load-buffer -t {SESSION} {f.name}', shell=True)
-        subprocess.run(f'tmux paste-buffer -t {SESSION} -d', shell=True)
-        # Send Enter separately — more reliable
-        subprocess.run(f'tmux send-keys -t {SESSION} Enter', shell=True)
-    try: os.unlink(f.name)
-    except: pass
-
-def read_reply(logfile, after_bytes):
-    if not logfile or not os.path.exists(logfile): return "", after_bytes
-    texts = []
-    with open(logfile) as fh:
-        fh.seek(after_bytes)
-        for line in fh:
-            try:
-                d = json.loads(line.strip())
-                msg = d.get("message", {})
-                if msg.get("role") != "assistant": continue
-                for block in msg.get("content", []):
-                    if block.get("text"):
-                        texts.append(block["text"])
-            except: pass
-    return '\n'.join(texts), os.path.getsize(logfile)
-
-def split_human(text):
-    parts = re.split(r'(?<=[.!?])\s+', text)
-    result = []
-    for p in parts:
-        p = p.strip()
-        if not p: continue
-        if len(p) > 300:
-            sub = re.split(r'(?<=,)\s+', p)
-            result.extend([s.strip() for s in sub if s.strip()])
-        else:
-            result.append(p)
-    final = []
-    for m in result:
-        while len(m) > 4000:
-            final.append(m[:3900] + "...")
-            m = m[3900:]
-        final.append(m)
-    return final
+def claude_ask(prompt, env, max_turns=3, timeout=600):
+    r = subprocess.run(
+        ["claude", "-p", prompt, "--permission-mode", "auto",
+         "--max-turns", str(max_turns), "--output-format", "text"],
+        capture_output=True, text=True, timeout=timeout,
+        cwd="/root", env={**os.environ, **env, "HOME": "/root"}
+    )
+    return (r.stdout + r.stderr).strip()
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID: return
     msg = update.message.text
     if not lock.acquire(blocking=False):
-        await update.message.reply_text("Busy.")
+        await update.message.reply_text("one sec...")
         return
     try:
+        # ── Pipeline: Flash ack → Pro thinks → Flash presents ──
+
+        # Layer 1: Flash instant ack
+        ack = claude_ask(
+            f"User said: '{msg}'. Give a SHORT (under 5 words) casual acknowledgment. Like 'on it' or 'let me check' or 'one sec'. Just the phrase, nothing else.",
+            FLASH, max_turns=1, timeout=10
+        )
+        if ack:
+            await update.message.reply_text(ack.strip()[:200])
+
+        # Layer 2: Pro does the real work
         await update.message.chat.send_action("typing")
-        log = os.environ.get("ARIA_LOG_PATH", "")
-        start_bytes = os.path.getsize(log) if os.path.exists(log) else 0
-        send(msg)
+        pro_reply = claude_ask(
+            f"You are ARIA, a helpful assistant running on a GPU server. Answer concisely. You can use bash to check things.\n\nUser: {msg}",
+            PRO, max_turns=20, timeout=600
+        )
+        if not pro_reply:
+            await update.message.reply_text("hmm, got nothing back. try again?")
+            return
 
-        sent_texts = set()
-        bubbles = []
-        for _ in range(300):
-            await asyncio.sleep(0.3)
-            full_reply, _ = read_reply(log, start_bytes)
-            if not full_reply: continue
+        # Check for permission questions
+        if any(w in pro_reply.lower() for w in ['do you want to proceed','requires confirmation','auto mode classifier']):
+            await update.message.reply_text(pro_reply[:4000] + '\n\nReply 1=yes 2=yes,always 3=no')
+            return
 
-            # Check for permission question
-            if any(w in full_reply.lower() for w in ['do you want to proceed','requires confirmation','auto mode classifier']):
-                await update.message.reply_text(full_reply[:4000] + '\n\nReply 1=yes 2=yes,always 3=no')
-                break
+        # Layer 3: Flash reformats Pro's answer into chat bubbles
+        await update.message.chat.send_action("typing")
+        chat = claude_ask(
+            f"Rewrite this as 2-4 casual text messages. One sentence per line. No markdown, no emojis. Keep key facts. Sound like a friend texting:\n\n{pro_reply}",
+            FLASH, max_turns=1, timeout=15
+        )
+        formatted = chat if chat else pro_reply
 
-            # Split into paragraphs, find new ones
-            new_bubbles = [b.strip() for b in full_reply.split('\n\n') if b.strip()]
-            if len(new_bubbles) <= 1:
-                new_bubbles = [b.strip() for b in full_reply.split('\n') if b.strip()]
-            new_bubbles = new_bubbles[:4]  # cap
+        # Send as bubbles
+        bubbles = [b.strip() for b in formatted.split('\n') if b.strip()][:4]
+        for i, b in enumerate(bubbles):
+            if i > 0:
+                delay = 0.3 + len(b) * 0.02 + (hash(b[:10]) % 8) * 0.03
+                await asyncio.sleep(min(delay, 5.0))
+            await update.message.reply_text(b[:4000])
 
-            # Send new bubbles as they appear
-            for b in new_bubbles:
-                key = b[:50]
-                if key not in sent_texts:
-                    sent_texts.add(key)
-                    if bubbles:  # not first bubble
-                        await update.message.chat.send_action("typing")
-                        delay = 0.3 + len(b) * 0.02 + (hash(key) % 8) * 0.03
-                        await asyncio.sleep(min(delay, 5.0))
-                    await update.message.reply_text(b[:4000])
-                    bubbles.append(b)
-
-            # All bubbles sent = done
-            if len(bubbles) >= len(new_bubbles) and bubbles:
-                # Wait 2 more seconds to make sure Claude is really done
-                await asyncio.sleep(2)
-                check, _ = read_reply(log, start_bytes)
-                if check == full_reply:
-                    break
-        else:
-            await update.message.reply_text("(no response)")
     except Exception as e:
         await update.message.reply_text(f"Error: {str(e)[:500]}")
     finally:
@@ -125,7 +86,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("ARIA ready")
+    print("ARIA: Flash→Pro→Flash pipeline")
     app.run_polling()
 
 if __name__ == "__main__":
