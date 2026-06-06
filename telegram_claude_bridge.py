@@ -73,6 +73,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.chat.send_action("typing")
         start_session()
 
+        # Instant feedback
+        dots = await update.message.reply_text("...")
+
         before = pane()
         send(msg)
 
