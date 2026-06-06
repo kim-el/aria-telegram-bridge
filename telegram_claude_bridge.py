@@ -64,6 +64,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Busy.")
         return
     try:
+        # Instant ack so user knows we'''re on it
+        await update.message.reply_text('on it 👀')
+
         log = os.environ.get("ARIA_LOG_PATH", "")
         start_bytes = os.path.getsize(log) if os.path.exists(log) else 0
         send(msg)
@@ -72,7 +75,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for _ in range(300):
             await asyncio.sleep(0.3)
             reply, _ = read_reply(log, start_bytes)
-            if reply: break
+            if reply:
+                # If Claude is asking a permission question, present options clearly
+                if any(w in reply.lower() for w in ['do you want to proceed','requires confirmation','auto mode classifier']):
+                    reply += '
+
+Reply: 1 (yes) / 2 (yes, always) / 3 (no)'
+                break
+            # Timeout after 30s without reply - Claude might be waiting on user
+            if _ > 100 and not reply:
+                reply = 'Claude is waiting for your response. Check tmux aria-claude.'
+                break
 
         if reply:
             chunks = split_human(reply)
