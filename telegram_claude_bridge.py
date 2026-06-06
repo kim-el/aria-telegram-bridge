@@ -77,26 +77,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
 
         if reply:
-            # Chat formatter: reshape technical answer → casual chat lines
-            try:
-                fmt = subprocess.run(
-                    ["claude", "-p",
-                     f"Rewrite as 2-4 casual chat messages. Be concise. No markdown, no emojis. Keep key facts. Sound like a friend:\n\n{reply}",
-                     "--max-turns", "1", "--output-format", "text", "--permission-mode", "auto"],
-                    capture_output=True, text=True, timeout=30,
-                    env={**os.environ, "HOME": "/root"}
-                )
-                formatted = fmt.stdout.strip() or reply
-            except:
-                formatted = reply
-
-            lines = [l.strip() for l in formatted.split('\n') if l.strip()][:4]  # max 4 bubbles
-            for i, line in enumerate(lines):
+            # Split on double newlines (natural paragraph breaks)
+            bubbles = [b.strip() for b in reply.split('\n\n') if b.strip()]
+            # If only 1 bubble, try single newlines
+            if len(bubbles) <= 1:
+                bubbles = [b.strip() for b in reply.split('\n') if b.strip()]
+            # Cap at 4
+            bubbles = bubbles[:4]
+            for i, bubble in enumerate(bubbles):
                 if i > 0:
                     await update.message.chat.send_action("typing")
-                    delay = 0.3 + len(line) * 0.03 + (hash(line[:10]) % 8) * 0.04
-                    await asyncio.sleep(min(delay, 6.0))
-                await update.message.reply_text(line[:4000])
+                    delay = 0.3 + len(bubble) * 0.02 + (hash(bubble[:10]) % 8) * 0.03
+                    await asyncio.sleep(min(delay, 5.0))
+                await update.message.reply_text(bubble[:4000])
         else:
             await update.message.reply_text("(no response)")
     except Exception as e:
