@@ -30,7 +30,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Layer 1: Flash instant ack
         ack = claude_ask(
-            f"User said: '{msg}'. Give a SHORT (under 5 words) casual acknowledgment. Like 'on it' or 'let me check' or 'one sec'. Just the phrase, nothing else.",
+            f"User said: '{msg}'. Reply with a short casual acknowledgment. Under 5 words. Be natural. Just the phrase, nothing else.",
             FLASH, max_turns=1, timeout=10
         )
         if ack:
